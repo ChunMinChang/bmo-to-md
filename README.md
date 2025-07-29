@@ -1,8 +1,13 @@
 # bmo-to-md
 
-A command-line tool to fetch bug information from Bugzilla and output as Markdown.
+A command-line tool to fetch bug information from Bugzilla and output as
+Markdown. Written by and for Claude Code.
 
 ## Installation
+
+```bash
+cargo install bmo-to-md
+```
 
 ```bash
 cargo install --path .
@@ -107,3 +112,7 @@ When using `-a/--download-attachments`:
 - Automatic decompression of `.gz`, `.tar.gz`, `.tgz`, `.zip`, `.zst`, and `.zstd` files
 - Files are saved in the same directory as the markdown file
 - Phabricator review links are automatically filtered out and not downloaded
+
+# License
+
+Apache 2 or MIT

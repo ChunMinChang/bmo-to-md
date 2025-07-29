@@ -2,6 +2,8 @@
 name = "bmo-to-md"
 version = "0.1.0"
 edition = "2024"
+description = "Dump a bugzilla bug to markdown, with attachments unziped"
+license = "MIT OR Apache-2.0"
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
