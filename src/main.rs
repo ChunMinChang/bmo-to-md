@@ -26,6 +26,10 @@ struct Args {
     /// Download attachments to output directory
     #[clap(short = 'a', long)]
     download_attachments: bool,
+
+    /// Print differential revisions (Dxxxx) from Phabricator
+    #[clap(short = 'd', long)]
+    print_diffs: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -335,6 +339,10 @@ async fn fetch_attachments(instance: &str, bug_id: u64) -> Result<Vec<Attachment
 }
 
 fn bug_to_markdown(bug: &Bug, comments: &[Comment], instance: &str) -> String {
+    bug_to_markdown_with_diffs(bug, comments, instance, &[])
+}
+
+fn bug_to_markdown_with_diffs(bug: &Bug, comments: &[Comment], instance: &str, diffs: &[String]) -> String {
     let mut md = String::new();
 
     md.push_str(&format!("# Bug {} - {}\n\n", bug.id, bug.summary));
@@ -343,6 +351,14 @@ fn bug_to_markdown(bug: &Bug, comments: &[Comment], instance: &str) -> String {
         "**URL:** {}/show_bug.cgi?id={}\n\n",
         instance, bug.id
     ));
+
+    if !diffs.is_empty() {
+        md.push_str("## Differential Revisions\n\n");
+        for diff in diffs {
+            md.push_str(&format!("- {}\n", diff));
+        }
+        md.push_str("\n");
+    }
 
     md.push_str("## Metadata\n\n");
     md.push_str(&format!("- **Status:** {}\n", bug.status));
@@ -637,6 +653,34 @@ fn is_phabricator_link(attachment: &Attachment) -> bool {
     attachment.content_type == "text/x-phabricator-request"
 }
 
+fn extract_differential_revision(attachment: &Attachment) -> Option<String> {
+    if !is_phabricator_link(attachment) {
+        return None;
+    }
+
+    // Try to extract Dxxxx from the file name (e.g., "phabricator-D123456-url.txt")
+    if let Some(caps) = attachment.file_name
+        .strip_prefix("phabricator-D")
+        .and_then(|s| s.split('-').next())
+    {
+        return Some(format!("D{}", caps));
+    }
+
+    // Fallback: check the summary field
+    if attachment.summary.starts_with("Bug ") {
+        if let Some(d_idx) = attachment.summary.find(" - D") {
+            let after_d = &attachment.summary[d_idx + 4..];
+            if let Some(end) = after_d.find(|c: char| !c.is_ascii_digit()) {
+                return Some(format!("D{}", &after_d[..end]));
+            } else {
+                return Some(format!("D{}", after_d));
+            }
+        }
+    }
+
+    None
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Args::parse();
@@ -646,7 +690,37 @@ async fn main() -> Result<()> {
     let bug = fetch_bug(&instance, bug_id).await?;
     let comments = fetch_comments(&instance, bug_id).await?;
 
-    let markdown = bug_to_markdown(&bug, &comments, &instance);
+    // Fetch differential revisions if needed
+    let diffs = if args.print_diffs || args.output_dir.is_some() || args.download_attachments {
+        let attachments = fetch_attachments(&instance, bug_id).await?;
+        attachments
+            .iter()
+            .filter_map(extract_differential_revision)
+            .collect()
+    } else {
+        Vec::new()
+    };
+
+    // Handle printing differential revisions
+    if args.print_diffs {
+        if !diffs.is_empty() {
+            println!("Differential Revisions:");
+            for diff in &diffs {
+                println!("  {}", diff);
+            }
+            println!();
+        } else {
+            println!("No differential revisions found.");
+            println!();
+        }
+
+        // If only printing diffs (not saving markdown), exit here
+        if args.output_dir.is_none() && !args.download_attachments {
+            return Ok(());
+        }
+    }
+
+    let markdown = bug_to_markdown_with_diffs(&bug, &comments, &instance, &diffs);
 
     if args.output_dir.is_some() || args.download_attachments {
         let base_output_dir = get_output_dir(&args)?;
