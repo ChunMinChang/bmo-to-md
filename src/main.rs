@@ -343,10 +343,6 @@ async fn fetch_attachments(instance: &str, bug_id: u64) -> Result<Vec<Attachment
         .unwrap_or_default())
 }
 
-fn bug_to_markdown(bug: &Bug, comments: &[Comment], instance: &str) -> String {
-    bug_to_markdown_with_diffs(bug, comments, instance, &[])
-}
-
 fn bug_to_markdown_with_diffs(bug: &Bug, comments: &[Comment], instance: &str, diffs: &[String]) -> String {
     let mut md = String::new();
 
