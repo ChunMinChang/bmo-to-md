@@ -185,23 +185,33 @@ fn read_api_key() -> Option<String> {
 }
 
 fn read_config() -> Result<Config> {
-    let config_path = dirs::config_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join("bmo-to-md")
-        .join("config.toml");
+    let mut candidates: Vec<PathBuf> = Vec::new();
 
-    if config_path.exists() {
-        let config_content =
-            fs::read_to_string(&config_path).context("Failed to read config file")?;
-        let config: Config =
-            toml::from_str(&config_content).context("Failed to parse config file")?;
-        Ok(config)
-    } else {
-        Ok(Config { 
-            output_dir: None,
-            api_key: None,
-        })
+    if let Some(home) = dirs::home_dir() {
+        candidates.push(home.join(".config").join("bmo-to-md").join("config.toml"));
     }
+
+    if let Some(sys_cfg) = dirs::config_dir() {
+        let p = sys_cfg.join("bmo-to-md").join("config.toml");
+        if !candidates.contains(&p) {
+            candidates.push(p);
+        }
+    }
+
+    for config_path in candidates {
+        if config_path.exists() {
+            let config_content =
+                fs::read_to_string(&config_path).context("Failed to read config file")?;
+            let config: Config =
+                toml::from_str(&config_content).context("Failed to parse config file")?;
+            return Ok(config);
+        }
+    }
+
+    Ok(Config {
+        output_dir: None,
+        api_key: None,
+    })
 }
 
 fn get_output_dir(args: &Args) -> Result<PathBuf> {
